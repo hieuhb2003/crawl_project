@@ -5,8 +5,8 @@ from pydub import AudioSegment
 
 # --- CẤU HÌNH ---
 MODEL_SIZE = "small"   # Chọn 'tiny', 'base', 'small', 'medium', 'large-v2' (Máy khỏe thì dùng large)
-INPUT_FILE = "" # Đường dẫn file audio gốc
-OUTPUT_DIR = "dataset_whisper2"
+INPUT_FILE = "downloads_audio/THOI_SU_Tỉnh_Gia_Lai_Càng_khó_khăn_tình_quân_-_dân_càng_th.wav" # Đường dẫn file audio gốc
+OUTPUT_DIR = "dataset_whisper_test"
 
 def process_with_whisper():
     print("1. Đang load model Whisper...")
