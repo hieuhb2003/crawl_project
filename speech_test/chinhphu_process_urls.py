@@ -4,6 +4,7 @@ Loads URLs and downloads audio for each one
 """
 
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from tqdm import tqdm
 import time
@@ -59,14 +60,16 @@ def get_random_user_agent():
     return random.choice(USER_AGENTS)
 
 def setup_driver():
-    """Setup Chrome WebDriver with random user-agent"""
+    """Setup Chrome WebDriver with manual path for ARM64"""
     options = webdriver.ChromeOptions()
     
     if CONFIG.get("headless", True):
         options.add_argument("--headless")
     
+    # Các option bắt buộc để chạy ổn định trên Linux/Docker/Jetson
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu") # Thường cần cho Chrome headless
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument(f"user-agent={get_random_user_agent()}")
     
@@ -74,7 +77,26 @@ def setup_driver():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
-    driver = webdriver.Chrome(options=options)
+    # === PHẦN QUAN TRỌNG NHẤT: TRỎ ĐƯỜNG DẪN ===
+    # Đường dẫn mặc định khi cài bằng apt-get
+    chromedriver_path = "/usr/bin/chromedriver" 
+    
+    # Kiểm tra xem file có tồn tại không
+    if not os.path.exists(chromedriver_path):
+        # Thử tìm ở đường dẫn phụ (đôi khi nó nằm ở đây)
+        chromedriver_path = "/usr/lib/chromium-browser/chromedriver"
+        if not os.path.exists(chromedriver_path):
+             raise FileNotFoundError("Không tìm thấy chromedriver! Hãy chạy: sudo apt install chromium-chromedriver")
+
+    print(f"Using chromedriver at: {chromedriver_path}")
+    service = Service(executable_path=chromedriver_path)
+    
+    # Khởi tạo driver với Service
+    try:
+        driver = webdriver.Chrome(service=service, options=options)
+    except Exception as e:
+        print(f"Lỗi khởi tạo Chrome: {e}")
+        raise e
     
     # Mask webdriver property
     driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {

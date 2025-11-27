@@ -4,6 +4,7 @@ Scrolls and clicks "Xem thêm" until no more content, then saves all URLs
 """
 
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -11,16 +12,69 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import time
 import json
 import re
+import os
+import random
+
+# User-Agent pool for rotation
+USER_AGENTS = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+]
+
+def get_random_user_agent():
+    """Get a random user agent from pool"""
+    return random.choice(USER_AGENTS)
 
 def setup_driver():
-    """Setup Chrome WebDriver"""
+    """Setup Chrome WebDriver with manual path for ARM64"""
     options = webdriver.ChromeOptions()
+    
     options.add_argument("--headless")
+    
+    # Các option bắt buộc để chạy ổn định trên Linux/Docker/Jetson
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+    options.add_argument("--disable-gpu") # Thường cần cho Chrome headless
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(f"user-agent={get_random_user_agent()}")
     
-    driver = webdriver.Chrome(options=options)
+    # Additional anti-detection measures
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+    
+    # === PHẦN QUAN TRỌNG NHẤT: TRỎ ĐƯỜNG DẪN ===
+    # Đường dẫn mặc định khi cài bằng apt-get
+    chromedriver_path = "/usr/bin/chromedriver" 
+    
+    # Kiểm tra xem file có tồn tại không
+    if not os.path.exists(chromedriver_path):
+        # Thử tìm ở đường dẫn phụ (đôi khi nó nằm ở đây)
+        chromedriver_path = "/usr/lib/chromium-browser/chromedriver"
+        if not os.path.exists(chromedriver_path):
+             raise FileNotFoundError("Không tìm thấy chromedriver! Hãy chạy: sudo apt install chromium-chromedriver")
+
+    print(f"Using chromedriver at: {chromedriver_path}")
+    service = Service(executable_path=chromedriver_path)
+    
+    # Khởi tạo driver với Service
+    try:
+        driver = webdriver.Chrome(service=service, options=options)
+    except Exception as e:
+        print(f"Lỗi khởi tạo Chrome: {e}")
+        raise e
+    
+    # Mask webdriver property
+    driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+        'source': '''
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            })
+        '''
+    })
+    
     return driver
 
 def scroll_and_load_all(driver):
