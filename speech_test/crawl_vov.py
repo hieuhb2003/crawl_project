@@ -4,6 +4,8 @@ Uses Selenium to handle pagination and extract audio from detail pages.
 """
 
 from selenium import webdriver
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -62,31 +64,42 @@ def get_random_user_agent():
     return random.choice(USER_AGENTS)
 
 def setup_driver():
-    """Setup Chrome WebDriver with random user-agent"""
-    options = webdriver.ChromeOptions()
+    """Setup Firefox WebDriver with random user-agent"""
+    options = FirefoxOptions()
     
     if CONFIG.get("headless", True):
         options.add_argument("--headless")
     
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument(f"user-agent={get_random_user_agent()}")
+    # Firefox specific options
+    options.set_preference("general.useragent.override", get_random_user_agent())
+    options.set_preference("dom.webdriver.enabled", False)
+    options.set_preference('useAutomationExtension', False)
     
-    # Additional anti-detection measures
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
+    # Try to find system installed geckodriver (common on Linux ARM64/Jetson)
+    service = None
+    system_paths = [
+        "/usr/bin/geckodriver",
+        "/usr/local/bin/geckodriver",
+        "/snap/bin/geckodriver"
+    ]
     
-    driver = webdriver.Chrome(options=options)
-    
-    # Mask webdriver property
-    driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-        'source': '''
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            })
-        '''
-    })
+    executable_path = None
+    for path in system_paths:
+        if os.path.exists(path):
+            executable_path = path
+            break
+            
+    if executable_path:
+        print(f"Using system geckodriver at: {executable_path}")
+        service = Service(executable_path=executable_path)
+        try:
+            driver = webdriver.Firefox(options=options, service=service)
+        except Exception as e:
+            print(f"Failed to use system geckodriver: {e}")
+            print("Falling back to Selenium Manager...")
+            driver = webdriver.Firefox(options=options)
+    else:
+        driver = webdriver.Firefox(options=options)
     
     return driver
 
