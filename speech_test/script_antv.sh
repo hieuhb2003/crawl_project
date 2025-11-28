@@ -1,0 +1,2 @@
+python3 antv_collect_urls.py
+python3 antv_process_urls.py
