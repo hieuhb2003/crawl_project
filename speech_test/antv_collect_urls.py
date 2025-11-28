@@ -66,6 +66,43 @@ def setup_driver():
     })
     return driver
 
+def scroll_and_load_all(driver, max_scrolls=50):
+    """Scroll and click 'Xem thêm' until no more content"""
+    print(f"  Loading items (Max scrolls: {max_scrolls})...")
+    
+    for i in range(max_scrolls):
+        # Scroll to bottom
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)
+        
+        # Try clicking "Xem thêm" button
+        try:
+            # Selector found via curl: .view-more
+            # Also check for text "Xem thêm"
+            buttons = driver.find_elements(By.CSS_SELECTOR, ".view-more")
+            if not buttons:
+                buttons = driver.find_elements(By.XPATH, "//span[contains(text(), 'Xem thêm')]")
+            
+            if buttons:
+                btn = buttons[0]
+                if btn.is_displayed():
+                    print(f"    [Scroll {i+1}] Found 'Xem thêm' button, clicking...")
+                    driver.execute_script("arguments[0].click();", btn)
+                    time.sleep(3) # Wait for content to load
+                    continue
+                else:
+                    print("    'Xem thêm' button found but not visible.")
+                    break
+            else:
+                print("    No 'Xem thêm' button found. Reached end?")
+                break
+                
+        except Exception as e:
+            print(f"    Error clicking button: {e}")
+            break
+            
+    print("  Finished loading.")
+
 def extract_urls_from_page(driver):
     """Extract detail page URLs from the current page"""
     urls = []
@@ -115,38 +152,16 @@ def main():
             driver.get(category_url)
             time.sleep(3)
             
-            # 1. Extract from initial page
+            # 1. Scroll and click "Load More" until no more content
+            scroll_and_load_all(driver)
+            
+            # 2. Extract URLs
             urls = extract_urls_from_page(driver)
             initial_count = len(all_urls)
             for u in urls:
                 all_urls.add(u)
-            print(f"  Found {len(urls)} URLs on page 1")
+            print(f"  Found {len(urls)} URLs (Total unique: {len(all_urls)})")
             
-            # 2. Try pagination (simple loop for a few pages)
-            # We don't know the max pages, so let's try up to page 5 for now
-            # or check if ?page=X works.
-            for page in range(2, 6):
-                page_url = f"{category_url}?page={page}"
-                print(f"  Checking page {page}...")
-                driver.get(page_url)
-                time.sleep(2)
-                
-                new_urls = extract_urls_from_page(driver)
-                if not new_urls:
-                    print("  No URLs found, stopping pagination for this category.")
-                    break
-                    
-                # Check if we are just seeing the same content (redirect to page 1)
-                # Simple heuristic: if all new URLs are already in all_urls, stop.
-                new_unique = [u for u in new_urls if u not in all_urls]
-                if not new_unique:
-                    print("  No new unique URLs found, stopping.")
-                    break
-                    
-                for u in new_unique:
-                    all_urls.add(u)
-                print(f"  + Added {len(new_unique)} new URLs")
-                
             save_urls(list(all_urls))
             
     finally:
