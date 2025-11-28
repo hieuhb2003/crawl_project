@@ -26,7 +26,7 @@ USER_AGENTS = [
 
 # List of podcast categories to crawl
 CATEGORIES = [
-    "https://baohaiphong.vn/podcast/diem-tin",
+    # "https://baohaiphong.vn/podcast/diem-tin",
     "https://baohaiphong.vn/podcast/thoi-su",
     "https://baohaiphong.vn/podcast/doi-songgiai-tri",
     "https://baohaiphong.vn/podcast/checkin-hai-phong",
@@ -157,8 +157,8 @@ def extract_all_urls(driver, silent=False):
     urls = []
     
     # Find links to detail pages
-    # Based on inspection: a[href*='diem-tin-podcast']
-    elements = driver.find_elements(By.CSS_SELECTOR, "a[href*='diem-tin-podcast']")
+    # Use generic selector for all categories: ul.onecms__loading h3 a
+    elements = driver.find_elements(By.CSS_SELECTOR, "ul.onecms__loading h3 a")
     
     for elem in elements:
         href = elem.get_attribute("href")
@@ -167,9 +167,8 @@ def extract_all_urls(driver, silent=False):
             continue
             
         # Filter for detail pages
-        # Must contain 'diem-tin-podcast' and end with .html
-        # Exclude social share links
-        if "diem-tin-podcast" in href and href.endswith(".html"):
+        # Must end with .html
+        if href.endswith(".html"):
             if "facebook.com" in href or "twitter.com" in href or "zalo" in href or "intent:" in href:
                 continue
                 
