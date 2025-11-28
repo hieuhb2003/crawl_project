@@ -24,6 +24,16 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
 ]
 
+# List of podcast categories to crawl
+CATEGORIES = [
+    "https://baohaiphong.vn/podcast/diem-tin",
+    "https://baohaiphong.vn/podcast/thoi-su",
+    "https://baohaiphong.vn/podcast/doi-songgiai-tri",
+    "https://baohaiphong.vn/podcast/checkin-hai-phong",
+    "https://baohaiphong.vn/podcast/an-toan-giao-thong",
+    "https://baohaiphong.vn/podcast/nghe-nguoi-tre-noi"
+]
+
 def get_random_user_agent():
     """Get a random user agent from pool"""
     return random.choice(USER_AGENTS)
@@ -111,10 +121,12 @@ def scroll_and_load_all(driver, max_scrolls=1000):
                         no_change_count = 0 
                         clicks += 1
                         
-                        # Extract and save URLs continuously
+                        # Extract and save URLs continuously (merging with existing)
                         current_urls = extract_all_urls(driver, silent=True)
-                        save_urls(current_urls)
-                        print(f"  Saved {len(current_urls)} URLs so far...")
+                        # We need to pass the master list to save_urls to avoid overwriting with just current page
+                        # But simpler: just return control to main loop or save purely local?
+                        # Let's just print progress here. The main loop handles the master list.
+                        print(f"  Found {len(current_urls)} URLs on this page so far...")
                         
                         continue
                     else:
@@ -186,23 +198,39 @@ def main():
     print("\nSetting up browser...")
     
     driver = setup_driver()
+    all_urls = set()
     
     try:
-        # 1. Load main page
-        print("\nLoading main page...")
-        driver.get("https://baohaiphong.vn/podcast/diem-tin")
-        time.sleep(3)
-        
-        # 2. Scroll and click "Load More" until no more content
-        # URLs are saved continuously inside this function
-        scroll_and_load_all(driver)
-        
-        # 3. Final extraction (just in case)
-        urls = extract_all_urls(driver)
-        save_urls(urls)
+        for url in CATEGORIES:
+            print(f"\n\n>>> Processing Category: {url}")
+            try:
+                # 1. Load category page
+                driver.get(url)
+                time.sleep(3)
+                
+                # 2. Scroll and click "Load More" until no more content
+                scroll_and_load_all(driver)
+                
+                # 3. Extract URLs from this category
+                urls = extract_all_urls(driver)
+                
+                # 4. Add to master list
+                initial_count = len(all_urls)
+                for u in urls:
+                    all_urls.add(u)
+                new_count = len(all_urls)
+                
+                print(f"  + Added {new_count - initial_count} new URLs (Total: {new_count})")
+                
+                # 5. Save continuously
+                save_urls(list(all_urls))
+                
+            except Exception as e:
+                print(f"❌ Error processing {url}: {e}")
+                continue
         
         print("\n" + "="*60)
-        print(f"✅ DONE! Found {len(urls)} URLs")
+        print(f"✅ DONE! Collected total {len(all_urls)} URLs from {len(CATEGORIES)} categories")
         print("="*60)
         print("\nNext step: Run baohaiphong_process_urls.py to download audio")
         
